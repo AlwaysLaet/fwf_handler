@@ -209,7 +209,7 @@ class FWFHandler(object):
             Tuple of strings, the first is a SQL command for creating a table based on the tape,
             the second for loading the fwf data into the table.
         """
-        unknown_dtypes = [k:v['location'] for k,v in self.tape.items() if v['sql_dtype'] is None]
+        unknown_dtypes = {k:v['location'] for k,v in self.tape.items() if v['sql_dtype'] is None}
         if unknown_dtypes:
             if infer_dtypes:
                 dtypes = self.infer_sql_dtypes(unknown_dtypes, fwf_path)
@@ -233,5 +233,5 @@ class FWFHandler(object):
         # Save to a SQL script file if desired
         if sql_script_path:
             with open(sql_script_path, 'w') as fout:
-                fout.writeline([create_table_str, load_infile_str])
+                fout.write("\n\n".join([create_table_str, load_infile_str]))
         return create_table_str, load_infile_str
