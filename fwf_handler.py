@@ -2,6 +2,7 @@ import csv
 import json
 import time
 import re
+from os.path import isfile
 from collections import OrderedDict
 
 class FWFHandler(object):
@@ -24,25 +25,40 @@ class FWFHandler(object):
         the character placement within the fixed-width file for that feature.
 
     """
-    def __init__(self, tape = None):
+    def __init__(self, tape = None, fwf_path = None):
         if isinstance(tape,dict):
             self.tape = OrderedDict(tape)
         else:
             self.tape = OrderedDict()
+        self.fwf_path = fwf_path
 
     @classmethod
-    def from_json(cls, json_path):
+    def from_json(cls, json_path, fwf_path = None):
         """Create a new FWFHandler object with tape loaded from json"""
         with open(json_path, 'r') as fin:
-            return cls(json.load(fin))
+            return cls(tape = json.load(fin), fwf_path = fwf_path)
 
-    def add_key(self, key = None, start = None, end = None, dtype = None):
+    def _check_fwf_path(self, trials = 3):
+        """Establish the fixed-width file path"""
+        fwf_path = self.fwf_path
+        trial = 1
+        clean_path = re.compile(r"(^[ ]*[\"\']|[\"\']$)")
+        while not isfile(fwf_path):
+            fwf_path = input("Please enter the path to the fixed-width file: ")
+            fwf_path = clean_path.sub('',str(fwf_path))
+            if trial > trials: return False
+            trial += 1
+        self.fwf_path = fwf_path
+        return isfile(self.fwf_path)
+
+    def add_key(self, key = None, start = None, end = None, sql_dtype = None):
         """Add a new feature key to location tuple into the tape
 
         Args:
-            key (string): Feature key to add to the tape.
-            start (int): Starting character location (incl) within the fixed-width file.
-            end (int): Ending character location (excl) within the fixed-width file.
+            key (string): Feature key to add to the tape
+            start (int): Starting character location (incl) within the fixed-width file
+            end (int): Ending character location (excl) within the fixed-width file
+            sql_dtype (str): SQL specific data type for feature
         """
         if (key is None):
             key = str(input("Desired key name (do not use quotations): "))
@@ -50,8 +66,8 @@ class FWFHandler(object):
             start = int(input("Starting location (inclusive): "))
         if (end is None):
             end = int(input("Ending location (exclusive): "))
-        self.tape[key] = dict(location = [start,end], dtype = dtype)
-        print("*%s* is assigned location: %s" % (key, self.tape[key]))
+        self.tape[key] = dict(location = [start,end], sql_dtype = sql_dtype)
+        print("*%s* is assigned location: %s" % (key, self.tape[key]['location']))
 
     def alter_key_location(self, key, start = None, end = None):
         """Alter an existing feature key location tuple in the tape
@@ -91,7 +107,7 @@ class FWFHandler(object):
             json.dump(self.tape, fout)
         return output_path
 
-    def to_csv(self, fwf_path, csv_path, verbose = False):
+    def to_csv(self, csv_path, verbose = False):
         """Convert the fixed-width format to csv with respect to the tape.
 
         This method uses the user-defined tape to parse a fixed-width
@@ -100,7 +116,6 @@ class FWFHandler(object):
         by the feature keys within the tape.
 
         Args:
-            fwf_path (string): Path to the fixed-width file.
             csv_path (string): Output path for the csv file.
             verbose (bool): Print out progress every 50000 lines. Default = False.
 
@@ -108,6 +123,11 @@ class FWFHandler(object):
             Path to the created csv file.
 
         """
+        # Check that all is good with the fixed-width file path
+        if not self._check_fwf_path():
+            print("Fixed-width file path is not established. Cannot convert to csv.")
+            return False
+        fwf_path = self.fwf_path
         # column names and character locations
         col_names = self.tape.keys()
         locs = [d['location'] for d in self.tape.values()]
@@ -192,7 +212,6 @@ class FWFHandler(object):
 
     def to_mysql_table_script(self,
                               table_name,
-                              fwf_path,
                               sql_script_path = None,
                               infer_dtypes = True,
                               nlines_infer = 1000):
@@ -200,7 +219,6 @@ class FWFHandler(object):
 
         Args:
             table_name (string): Desired name for SQL table
-            fwf_path (string): Path to the fixed-width file
             sql_script_path (string or None): Path to save SQL script if desired, else None
             infer_dtypes (bool): If True, will infer SQL data type for unknown values
             nlines_infer (int): Max number of lines to use when inferring data type
@@ -209,6 +227,12 @@ class FWFHandler(object):
             Tuple of strings, the first is a SQL command for creating a table based on the tape,
             the second for loading the fwf data into the table.
         """
+        # Check that all is good with the fixed-width file path
+        if not self._check_fwf_path():
+            print("Fixed-width file path is not established. Cannot convert to csv.")
+            return False
+        fwf_path = self.fwf_path
+        # Collect all unknown SQL data types
         unknown_dtypes = {k:v['location'] for k,v in self.tape.items() if v['sql_dtype'] is None}
         if unknown_dtypes:
             if infer_dtypes:
