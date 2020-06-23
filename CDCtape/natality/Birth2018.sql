@@ -108,7 +108,7 @@ CREATE TABLE birth2018 (
 	infant_living_at_report CHAR(1),
 	infant_breastfed_at_discharge CHAR(1));
 
-LOAD DATA INFILE '/tmp/Nat2018Tot.txt' INTO TABLE birth2018
+LOAD DATA INFILE 'path-to-2018-natality-data.txt' INTO TABLE birth2018
 	(@var1)
 	SET
 	birth_year = SUBSTR(@var1,9,4),
